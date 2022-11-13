@@ -1,0 +1,14 @@
+
+*.xlsx
+
+*.lock
+
+*.html
+
+*.csv
+
+notebooks/__pycache__/
+
+notebooks/.virtual_documents/
+
+notebooks/.ipynb_checkpoints/
