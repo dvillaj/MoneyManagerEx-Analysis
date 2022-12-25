@@ -1,4 +1,7 @@
 
 .ipynb_checkpoints/
-
+data
+target
 .virtual_documents/
+
+__pycache__/
