@@ -373,12 +373,12 @@ def write_raw_to_excel(df, excel_name):
     xlsx.close()
 
 
-def treemap_data(df, movement_function):
+def treemap_data(df, movement_function, agg_function = "sum"):
     return df  \
         .pipe(movement_function) \
         .assign(MaxDate = lambda df: pd.to_datetime((df.Date.max() - datetime.timedelta(days=0)).date()),
                 MinDate = lambda df: pd.to_datetime((df.Date.min() - datetime.timedelta(days=0)).date())) \
         .query("Date.between(MinDate, MaxDate)") \
-        .groupby(["Tipo", "Categoria", "Subcategoria", "Beneficiario"], as_index = False).Importe.sum() \
+        .groupby(["Tipo", "Categoria", "Subcategoria", "Beneficiario"], as_index = False).Importe.agg(agg_function) \
         .assign(AbsoluteImporte = lambda df: df.Importe.abs()) \
         .query("not (Tipo == 'Gastos' and Importe > 0)")
