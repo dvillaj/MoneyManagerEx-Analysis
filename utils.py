@@ -111,93 +111,6 @@ def acum_total(df):
         .filter(["Mes", "Gastos", "Ingresos", "Total", "GastosAcum", "IngresosAcum", "TotalAcum"])
 
 
-def add_serie(chart, sheet_name, column, max_row, color_name, serie_name = None ):
-    
-    if not serie_name:
-        serie_name = f'={sheet_name}!${column}$1'
-    
-    chart.add_series({
-        'name':       serie_name,
-        'categories': f'={sheet_name}!$A$2:$A${max_row}',
-        'values':     f'={sheet_name}!${column}$2:${column}${max_row}',
-        'line' :     { 'color' :  f'{color_name}' },
-        'fill' :     { 'color' :  f'{color_name}' }
-    })
-    
-    
-def create_total_column_graph(writer, df, worksheet_name):
-    sheet_graph_name = f'{worksheet_name}.Graph'
-    
-    df_acum = df.pipe(filter_total, ['Tipo'])
-    df_acum.to_excel(writer, sheet_name=sheet_graph_name, index = False)
-
-    workbook  = writer.book
-    worksheet_graph = writer.sheets[sheet_graph_name]
-    worksheet_graph.hide()
-    
-    # Create a chart object.
-    chart = writer.book.add_chart({'type': 'column'})
-
-    # Get the dimensions of the dataframe.
-    (max_row, max_col) = df_acum.shape
-
-    add_serie(chart, sheet_graph_name, "B", max_row + 1, "blue", "Tipo")
-
-    # Add a chart title and some axis labels.
-    chart.set_title ({'name': 'Gastos / Ingresos'})
-    return chart
-
-
-def create_graph(writer, sheet_graph_name, max_row, letter, graph_type, graph_name):
-    letters = bytearray(range(97,123)).decode("utf-8").upper()
-
-    workbook  = writer.book
-    # Create a new chart object. In this case an embedded chart.
-    chart = workbook.add_chart({'type': graph_type })
-
-    index = letters.find(letter)
-    add_serie(chart, sheet_graph_name, letters[index], max_row + 1, 'red', 'Gastos',)
-    add_serie(chart, sheet_graph_name, letters[index + 1], max_row + 1, 'blue', 'Ingresos')
-    add_serie(chart, sheet_graph_name, letters[index + 2], max_row + 1, 'black', 'Total')
-    
-    
-    # Add a chart title and some axis labels.
-    chart.set_title ({'name': graph_name})
-    chart.set_x_axis({'name': 'Mes'})
-    chart.set_y_axis({'name': 'Cantidad (Euros)'})
-    
-    # Set an Excel chart style. Colors with white outline and shadow.
-    chart.set_style(10)
-    
-    return chart
-
-def create_line_graph_and_acum(writer, df, sheet_name):
-    sheet_graph_name = f'{sheet_name}.Acum.Graph'
-    
-    df_acum = df.pipe(acum_total)
-    df_acum.to_excel(writer, sheet_name=sheet_graph_name, index = False)
-
-    workbook  = writer.book
-    worksheet_graph = writer.sheets[sheet_graph_name]
-    worksheet_graph.hide()
-
-
-    # Get the dimensions of the dataframe.
-    (max_row, max_col) = df_acum.shape
-    
-    chart1 = create_graph(writer, sheet_graph_name, max_row, 'B', 'line', 'Gastos e Ingresos Mensuales')
-    chart2 = create_graph(writer, sheet_graph_name, max_row, 'E', 'line', 'Gastos e Ingresos Acumulados')
-    chart3 = create_graph(writer, sheet_graph_name, max_row, 'B', 'column', 'Gastos e Ingresos Mensuales')
-
-    return (chart1, chart2, chart3)
-
-def insert_chart(writer, chart, sheet_name, cell):
-    workbook  = writer.book
-    worksheet = workbook.get_worksheet_by_name(sheet_name)
-    
-    # Insert the chart into the worksheet (with an offset).
-    worksheet.insert_chart(cell, chart, {'x_offset': 25, 'y_offset': 10})
-
     
     
 def total_rows(df, columns):
@@ -418,19 +331,7 @@ def write_to_excel(df, excel_name):
     save_to_excel_pivot(xlsx, df, ["Beneficiario"], "Beneficiarios")
     save_to_excel(xlsx, df.pipe(return_beneficiarios), "Beneficario - Categoría")
 
-    workbook  = xlsx.book
-    workbook.add_worksheet('Graphs')
-
-    df_tipo = df.pipe(pivot_by_category_totals, ["Tipo"])
-    chart1 =  create_total_column_graph(xlsx, df_tipo, 'General')
-    (chart2, chart3, chart4) =  create_line_graph_and_acum(xlsx, df_tipo, 'General')
-
-    insert_chart(xlsx, chart1, 'Graphs', 'B3')
-    insert_chart(xlsx, chart2, 'Graphs', 'K3')
-    insert_chart(xlsx, chart3, 'Graphs', 'B19')
-    insert_chart(xlsx, chart4, 'Graphs', 'K19')
-    xlsx.save()    
-    
+    xlsx.close()
     
 def group_data(df):
     category = ["Tipo", "Year", "Month", "Categoria", "Subcategoria", "Beneficiario"]
