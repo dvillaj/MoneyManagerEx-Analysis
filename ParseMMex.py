@@ -21,14 +21,14 @@ def plot_tree_map(df, Tipo):
         )
 
 
-    plotly.offline.plot(fig, filename = f'TreeMap_{Tipo}.html')
+    plotly.offline.plot(fig, filename = f'target/TreeMap_{Tipo}.html')
     
 
-df_data = pd.read_csv("M.csv") \
+df_data = pd.read_csv("data/M.csv") \
     .pipe(clean_data)
 
-write_to_excel(df_data.pipe(return_despacho_movements), 'Hogar.xlsx')
-write_to_excel(df_data.pipe(return_hogar_movements), 'Despacho.xlsx')
+write_to_excel(df_data.pipe(return_despacho_movements), 'target/Hogar.xlsx')
+write_to_excel(df_data.pipe(return_hogar_movements), 'target/Despacho.xlsx')
 
 plot_tree_map(treemap_data(df_data, return_hogar_movements), "Hogar")
 plot_tree_map(treemap_data(df_data, return_despacho_movements), "Despacho")

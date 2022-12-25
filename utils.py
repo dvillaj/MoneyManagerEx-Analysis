@@ -4,7 +4,6 @@ import datetime
 
 
 def clean_data(df):
-    
     today = datetime.date.today()
     year = today.year
     month = today.month
@@ -64,8 +63,6 @@ def pivot_by_category_totals(df, columns):
                     .reset_index(drop = True)
 
 
-
-
 def pivot_by_category(df, category):
     today = datetime.date.today()
     year = today.year
@@ -86,7 +83,7 @@ def pivot_by_category(df, category):
       .reset_index(drop = True) \
       .fillna({ fist_item : "Total" }) \
       .rename_axis(None, axis=1)
-      
+
 
 def total_year(df, month):
     total = 0
@@ -98,10 +95,10 @@ def total_year(df, month):
 
 def avg_year(df, month):
     total = 0
-    for n in range(month - 1):
+    for n in range(month):
         total = total + df[n + 1]
 
-    return round(total / (month - 1),2)
+    return round(total / month,2)
 
 
 def get_months():
@@ -220,6 +217,10 @@ def highlight_current_month(df):
     return ["color: blue" for v in df]
 
 
+def style_locale_es(df):
+    return df.style.format(decimal = ',', thousands=".", precision = 2)
+
+
 def style_dataframe_totals(df, columns):
     today = datetime.date.today()
     month = today.month
@@ -319,7 +320,9 @@ def save_to_excel_pivot(xlsx, df, columns, sheet_name_arg = None):
     df_pivot = df.pipe(pivot_by_category_totals, columns) \
           .pipe(reoder_columns, columns)
 
-    df_pivot.pipe(style_dataframe_totals, columns).to_excel(xlsx, sheet_name, index = False)
+    df_pivot \
+        .pipe(style_dataframe_totals, columns) \
+        .to_excel(xlsx, sheet_name, index = False)
     worksheet = workbook.get_worksheet_by_name(sheet_name)
 
     excel_columns_size(worksheet, get_col_widths_months(df_pivot, columns))
