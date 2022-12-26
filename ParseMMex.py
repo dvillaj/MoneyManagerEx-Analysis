@@ -5,14 +5,15 @@ import plotly
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+
 def plot_tree_map(df, Tipo):
     # color = "Categoria",
     # px.Constant('All'),
     # color_continuous_scale = 'RdBu',
     fig = px.treemap(df,
                 path=[ 'Tipo', 'Categoria', 'Subcategoria', 'Beneficiario'],
-                values = "AbsoluteImporte",
-                title= f"{Tipo}: Gastos / Ingresos por Categoria"
+                values = "Total",
+                title= f"{Tipo}: Gastos / Ingresos totales por Categoria"
     )
 
     fig.update_layout(
@@ -27,8 +28,8 @@ def plot_tree_map(df, Tipo):
 df_data = pd.read_csv("data/M.csv") \
     .pipe(clean_data)
 
-write_to_excel(df_data.pipe(return_despacho_movements), 'target/Hogar.xlsx')
-write_to_excel(df_data.pipe(return_hogar_movements), 'target/Despacho.xlsx')
+write_to_excel(df_data.pipe(return_hogar_movements), 'target/Hogar.xlsx')
+write_to_excel(df_data.pipe(return_despacho_movements), 'target/Despacho.xlsx')
 
-plot_tree_map(treemap_data(df_data, return_hogar_movements), "Hogar")
-plot_tree_map(treemap_data(df_data, return_despacho_movements), "Despacho")
+plot_tree_map(treemap_data(df_data.pipe(return_hogar_movements)), "Hogar")
+plot_tree_map(treemap_data(df_data.pipe(return_despacho_movements)), "Despacho")

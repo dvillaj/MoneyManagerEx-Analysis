@@ -2,43 +2,101 @@ import pandas as pd
 import numpy as np
 import datetime
 
-
 def clean_data(df):
-    today = datetime.date.today()
-    year = today.year
-    month = today.month
-    
-    return df \
-        .rename(columns = { 'Categoría' : 'Categoria' }) \
-        .assign(Fecha = lambda dataset : pd.to_datetime(dataset.Fecha, format = "%d/%m/%Y"),
-              Subcategoria = lambda dataset : dataset.Categoria.str.split(':').str.get(1),
-              Categoria = lambda dataset : dataset.Categoria.str.split(':').str.get(0),
-              Date = lambda dataset: dataset.Fecha,
-              Year = lambda dataset: dataset.Fecha.dt.year,
-              Month = lambda dataset: dataset.Fecha.dt.month,
-              Tipo = lambda df: df.Categoria.map(lambda x: "Ingresos" if "Ingresos" in x else "Gastos"),
-              Beneficiario = lambda df: df.Beneficiario.fillna("No Definido")   
-         ) \
-        .query("Month <= @month and Year == @year") \
-        .query("Categoria not in ['Transferencia', 'Préstamo']") \
-        .query("Cuenta not in ['DEUDAS']") \
-        .filter(["Identificador", "Date", "Year", "Month", "Cuenta", "Tipo", "Categoria", "Subcategoria", "Beneficiario", "Importe", "Divisa", "Número", "Estado", "Notas" ]) 
+    return (df 
+        .rename(columns = { 'Categoría' : 'Categoria' }) 
+        .query("Tipo != 'Tranfer'")            
+        .assign(Fecha = lambda dataset: pd.to_datetime(dataset.Fecha, format = "%d/%m/%Y"),
+                Subcategoria = lambda dataset : dataset.Categoria.str.split(':').str.get(1),
+                Categoria = lambda dataset : dataset.Categoria.str.split(':').str.get(0),
+                Tipo = lambda df: df.Categoria.map(lambda x: "Ingresos" if "Ingresos" in x else "Gastos"),
+                Beneficiario = lambda df: df.Beneficiario.fillna("No Definido")
+          )
+        .query("Estado == 'R'")
+        .filter(["Fecha", "Tipo", "Categoria", "Subcategoria", "Beneficiario", "Importe"])
+      )
+
 
 
 def return_despacho_movements(df):
-        return df \
-            .query("Categoria.str.startswith('Despacho')") \
+        return ( df
+            .query("Categoria.str.startswith('Despacho')") 
             .assign(Categoria = lambda df: df.Categoria.str[11:]) 
+            .convert_dtypes()
+        )
 
 
 def return_hogar_movements(df):
-        return df \
+        return (df 
           .assign(
             Beneficiario = lambda df: df.apply(lambda dataset: "No Definido" if dataset.Categoria.startswith("Despacho") else dataset.Beneficiario, axis = 'columns'), 
             Subcategoria = lambda df: df.apply(lambda dataset: "Despacho" if dataset.Categoria.startswith("Despacho") else dataset.Subcategoria, axis = 'columns'), 
             Tipo = lambda df: df.apply(lambda dataset: "Ingresos" if dataset.Categoria.startswith("Despacho") else dataset.Tipo, axis = 'columns'),
             Categoria = lambda df: df.Categoria.map(lambda x: "Ingresos" if x.startswith("Despacho") else x)
           )
+            .convert_dtypes()
+        )
+
+
+def total_rows(df, columns):
+    if len(columns) > 1:
+        group_by_columns = columns[:-1]
+        first_column = group_by_columns[-1]
+        last_column = columns[-1]
+
+        df_totales = df \
+            .groupby(group_by_columns).sum().reset_index() \
+            .query(first_column + " not in ['Total']")
+
+        df_totales[last_column] = df_totales[first_column].map(lambda x: "Total" if x == "Total" else "Total " + x)
+    else:
+        last_column = columns[0]
+        df_totales = df.sum(numeric_only=True).to_frame().transpose()
+        df_totales[last_column] = "Total"
+
+    return df_totales
+
+
+def pivot_table(df, left_columns, top_columns, value_column,  aggfunc_name="sum"):
+    return (df
+            .pivot_table(index =left_columns,
+                       columns = top_columns,
+                       values=value_column,
+                       aggfunc=aggfunc_name,
+                       fill_value = 0)
+            .reset_index()
+            .rename_axis(columns = None)
+ )
+
+
+def sort_columns(df, columns):
+    cols = columns + sorted(df.columns[len(columns):].to_list(), reverse=True)
+    return df.filter(cols)
+
+
+def pivot_by_category(df, category):
+    from datetime import datetime
+    import locale
+
+    locale.setlocale(locale.LC_ALL, 'es_es')
+    fist_item = category[0]
+
+    return (
+        df
+         .assign(Mes = lambda dataset: dataset.Fecha.dt.to_period('M').dt.to_timestamp())
+         .pipe(pivot_table, left_columns = category, top_columns = "Mes", value_column = "Importe")
+         .pipe(sort_columns, category)
+         .rename(columns = lambda col: col if isinstance(col, str) else col.strftime("%B %Y").title())
+         .assign(
+            Media = lambda dataset: dataset.mean(axis = 'columns'),
+            Total = lambda dataset: dataset.drop(columns = "Media").sum(axis = 'columns')
+         )
+        .reset_index(drop = True)
+        .fillna({ fist_item : "Total" })
+        .rename_axis(None, axis='columns')
+        .round(2)
+        .convert_dtypes()
+    )
 
 
 def pivot_by_category_totals(df, columns):
@@ -62,125 +120,6 @@ def pivot_by_category_totals(df, columns):
     return df_all_totales.sort_values(columns) \
                     .reset_index(drop = True)
 
-
-def pivot_by_category(df, category):
-    today = datetime.date.today()
-    year = today.year
-    month = today.month
-    
-    group_list = ["Year", "Month"]
-    group_list.extend(category)
-    fist_item = category[0]
-    return df \
-      .groupby(group_list, as_index = False).Importe.sum() \
-      .drop(columns = ["Year"]) \
-      .pivot_table(index = category, columns = "Month", values = "Importe", aggfunc = "sum") \
-      .reset_index() \
-      .fillna(0) \
-      .assign(Media = lambda df: avg_year(df, month),
-              Total = lambda df: total_year(df, month)) \
-      .rename(columns = get_months()) \
-      .reset_index(drop = True) \
-      .fillna({ fist_item : "Total" }) \
-      .rename_axis(None, axis=1)
-
-
-def total_year(df, month):
-    total = 0
-    for n in range(month):
-        total = total + df[n + 1]
-
-    return round(total,2)
-
-
-def avg_year(df, month):
-    total = 0
-    for n in range(month):
-        total = total + df[n + 1]
-
-    return round(total / month,2)
-
-
-def get_months():
-    return {
-        1 : 'Enero',
-        2 : 'Febrero',
-        3 : 'Marzo',
-        4 : 'Abril',
-        5 : 'Mayo',
-        6 : 'Junio',
-        7 : 'Julio',
-        8 : 'Agosto',
-        9 : 'Septiembre',
-        10 : 'Octubre',
-        11 : 'Noviembre',
-        12 : 'Diciembre'
-      }
-
-
-def get_month_name(month):
-    return get_months()[month]
-
-
-
-def varnames_as_values(df):
-     return df \
-        .set_axis(df.iloc[0].to_list(),
-              axis = 'columns') \
-        .drop(0)
-
-
-def replace_first_column(df, colname):
-    columns = df.columns.to_list()
-    columns[0] = colname
-    return df.set_axis(columns,
-                   axis = 'columns')
-
-
-def drop_last_column(df):
-     return df.drop(columns=df.columns[-1])
-    
-    
-def add_serie(chart, sheet_name, column, max_row, color_name, serie_name = None ):
-    
-    if not serie_name:
-        serie_name = f'={sheet_name}!${column}$1'
-    
-    chart.add_series({
-        #'name':       f'={sheet_name}!${column}$1',
-        'name':       serie_name,
-        'categories': f'={sheet_name}!$A$2:$A${max_row}',
-        'values':     f'={sheet_name}!${column}$2:${column}${max_row}',
-        'line' :     { 'color' :  f'{color_name}' }
-    })
-
-
-def filter_total(df, columns):
-    df_total = df.tail(1)
-    df_data = df[:-1] \
-          .assign(Total = lambda df: df.Total.abs()) 
-    columns.extend(['Total'])
-    return pd.concat([df_data, df_total]) \
-        .filter(columns) 
-
-
-def acum_total(df):
-    return df \
-        .transpose() \
-        .reset_index(drop = False) \
-        .pipe(varnames_as_values) \
-        .pipe(drop_last_column) \
-        .pipe(replace_first_column, "Mes") \
-        .query("Mes not in ('Total', 'Media')") \
-        .assign(GastosAcum = lambda df: df.Gastos.cumsum(),
-                IngresosAcum = lambda df: df.Ingresos.cumsum(),
-                Total = lambda df: df.Gastos + df.Ingresos,
-                TotalAcum = lambda df: df.GastosAcum + df.IngresosAcum) \
-        .assign(Gastos = lambda df: df.Gastos.abs(),
-                GastosAcum = lambda df: df.GastosAcum.abs()) \
-        .reset_index(drop = True) \
-        .filter(["Mes", "Gastos", "Ingresos", "Total", "GastosAcum", "IngresosAcum", "TotalAcum"])
-    
     
 def total_rows(df, columns):
     if len(columns) > 1:
@@ -237,18 +176,6 @@ def style_dataframe_totals(df, columns):
     return df_styled
 
 
-def reoder_columns(df, columns):
-    today = datetime.date.today()
-    month = today.month
-    
-    df_columns = df.columns.to_list()
-    keep_columns = columns + [ get_month_name(month), "Media" ]
-
-    for month in keep_columns:
-        df_columns.remove(month)
-        
-    return df.filter(keep_columns + df_columns)
-
 
 def get_col_widths(dataframe):
     sizes = []
@@ -301,13 +228,14 @@ def excel_columns_size(worksheet, columns_size):
 
 
 def return_beneficiarios(df):
-    return df \
-        .assign(Categoria = lambda df: df.Categoria + ":" + df.Subcategoria) \
-        .filter(["Beneficiario", "Categoria"]) \
-        .drop_duplicates() \
-        .dropna() \
-        .assign(Duplicado = lambda df: df.groupby("Beneficiario").Categoria.transform("count").map(lambda x: "Si" if x > 1 else "No")) \
-        .sort_values("Beneficiario")
+    return (df 
+        .assign(Categoria = lambda df: df.Categoria + ":" + df.Subcategoria) 
+        .filter(["Beneficiario", "Categoria"]) 
+        .drop_duplicates() 
+        .dropna() 
+        .assign(Duplicado = lambda df: df.groupby(["Beneficiario"]).Categoria.transform("count").map(lambda x: "Si" if x > 1 else "No"))
+        .sort_values(["Beneficiario"])
+    )
     
         
 def save_to_excel_pivot(xlsx, df, columns, sheet_name_arg = None):
@@ -317,8 +245,7 @@ def save_to_excel_pivot(xlsx, df, columns, sheet_name_arg = None):
         sheet_name = sheet_name_arg
     
     workbook = xlsx.book        
-    df_pivot = df.pipe(pivot_by_category_totals, columns) \
-          .pipe(reoder_columns, columns)
+    df_pivot = df.pipe(pivot_by_category_totals, columns)
 
     df_pivot \
         .pipe(style_dataframe_totals, columns) \
@@ -331,12 +258,7 @@ def save_to_excel_pivot(xlsx, df, columns, sheet_name_arg = None):
     excel_border(xlsx, worksheet, df_pivot)
     
 
-def save_to_excel(xlsx, df, sheet_name_arg = None):
-    if not sheet_name_arg:
-        sheet_name = columns[-1]
-    else:
-        sheet_name = sheet_name_arg
-
+def save_to_excel(xlsx, df, sheet_name):
     workbook = xlsx.book
 
     df.to_excel(xlsx, sheet_name, index = False)
@@ -361,24 +283,15 @@ def write_to_excel(df, excel_name):
     xlsx.close()
 
 
-def group_data(df):
-    category = ["Tipo", "Year", "Month", "Categoria", "Subcategoria", "Beneficiario"]
-    return df \
-      .groupby(category, as_index = False).Importe.sum()    
-
-
-def write_raw_to_excel(df, excel_name):
-    xlsx = pd.ExcelWriter(excel_name, engine='xlsxwriter')
-    df.pipe(group_data).to_excel(xlsx, "Data", index = False)
-    xlsx.close()
-
-
-def treemap_data(df, movement_function, agg_function = "sum"):
-    return df  \
-        .pipe(movement_function) \
-        .assign(MaxDate = lambda df: pd.to_datetime((df.Date.max() - datetime.timedelta(days=0)).date()),
-                MinDate = lambda df: pd.to_datetime((df.Date.min() - datetime.timedelta(days=0)).date())) \
-        .query("Date.between(MinDate, MaxDate)") \
-        .groupby(["Tipo", "Categoria", "Subcategoria", "Beneficiario"], as_index = False).Importe.agg(agg_function) \
-        .assign(AbsoluteImporte = lambda df: df.Importe.abs()) \
-        .query("not (Tipo == 'Gastos' and Importe > 0)")
+def treemap_data(df):
+    return (df
+        .assign(MaxDate = lambda df: pd.to_datetime((df.Fecha.max() - datetime.timedelta(days=0)).date()),
+                MinDate = lambda df: pd.to_datetime((df.Fecha.min() - datetime.timedelta(days=0)).date()))
+        .query("Fecha.between(MinDate, MaxDate)")
+        .pipe(pivot_by_category, ["Tipo", "Categoria", "Subcategoria", "Beneficiario"])
+        # .filter(["Tipo", "Categoria", "Subcategoria", "Beneficiario", "Media", "Total"])
+        .query("not (Tipo == 'Gastos' and Total > 0)")
+        .assign(Media = lambda df: df.Media.abs(),
+                Total = lambda df: df.Total.abs()
+               )
+     )
