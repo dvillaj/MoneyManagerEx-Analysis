@@ -4,18 +4,23 @@ import numpy as np
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+import locale
+locale.setlocale(locale.LC_ALL, 'es_es')
+
 def clean_data(df):
     return (df 
         .rename(columns = { 'Categoría' : 'Categoria' }) 
-        .query("Tipo != 'Tranfer'")            
+        .query("Tipo != 'Transfer'")            
         .assign(Fecha = lambda dataset: pd.to_datetime(dataset.Fecha, format = "%d/%m/%Y"),
                 Subcategoria = lambda dataset : dataset.Categoria.str.split(':').str.get(1),
                 Categoria = lambda dataset : dataset.Categoria.str.split(':').str.get(0),
+                Transaccion = lambda df: df.Tipo.replace({'Deposit' : 'Abono', 'Withdrawal': 'Cargo'}),
                 Tipo = lambda df: df.Categoria.map(lambda x: "Ingresos" if "Ingresos" in x else "Gastos"),
                 Beneficiario = lambda df: df.Beneficiario.fillna("No Definido")
           )
         .query("Estado == 'R'")
-        .filter(["Fecha", "Tipo", "Categoria", "Subcategoria", "Beneficiario", "Importe"])
+        .filter(["Fecha", "Tipo", "Categoria", "Subcategoria", "Beneficiario", "Transaccion", "Importe"])
+        .convert_dtypes()
       )
 
 
@@ -24,7 +29,6 @@ def return_despacho_movements(df):
         return ( df
             .query("Categoria.str.startswith('Despacho')") 
             .assign(Categoria = lambda df: df.Categoria.str[11:]) 
-            .convert_dtypes()
         )
 
 
@@ -36,7 +40,6 @@ def return_hogar_movements(df):
             Tipo = lambda df: df.apply(lambda dataset: "Ingresos" if dataset.Categoria.startswith("Despacho") else dataset.Tipo, axis = 'columns'),
             Categoria = lambda df: df.Categoria.map(lambda x: "Ingresos" if x.startswith("Despacho") else x)
           )
-            .convert_dtypes()
         )
 
 def return_beneficiarios(df):
@@ -102,10 +105,6 @@ def sort_columns(df, columns):
 
 
 def pivot_by_category(df, category):
-    from datetime import datetime
-    import locale
-
-    locale.setlocale(locale.LC_ALL, 'es_es')
     fist_item = category[0]
 
     return (
@@ -167,29 +166,26 @@ def style_locale_es(df):
     return df.style.format(decimal = ',', thousands=".", precision = 2)
 
 
-def style_dataframe_totals(df, columns):
-    # import datetime
+def get_current_month():
+    from datetime import datetime  
+    return datetime.today().strftime("%B %Y").title()
 
-    # today = datetime.date.today()
-    # month = today.month
-    
-    df_styled = df \
-      .style.format(thousands=",", precision = 2)
+         
+def style_dataframe_totals(df, columns):
+    df_styled = df.pipe(style_locale_es)
 
     for n in range(0,len(columns)):
         df_styled = df_styled.apply(highlight_total, axis = 1, column_name = columns[n])
 
     df_styled = df_styled.apply(highlight_important_columns, subset=columns, axis=1)
-    # df_styled = df_styled.apply(highlight_current_month, subset=[ get_month_name(month) ], axis=1)
+    # df_styled = df_styled.apply(highlight_current_month, subset=[get_current_month()], axis=1)
         
     return df_styled
 
-
-
 def get_col_widths(dataframe):
     sizes = []
-    for column in dataframe.columns.to_list():
-        max_value = max([max(dataframe[column].str.len()), len(column)])
+    for column_name in dataframe.columns.to_list():
+        max_value = max([max(dataframe[column_name].str.len()), len(column_name)])
         sizes.extend([max_value])
 
     return sizes
@@ -197,11 +193,16 @@ def get_col_widths(dataframe):
 
 def get_col_widths_months(dataframe, columns):
     sizes = []
-    for column in columns:
-        max_value = max([max(dataframe[column].str.len()), len(column)])
+    for index, column_name in enumerate(dataframe.columns.to_list()):
+
+        if (index < len(columns)):
+            max_value = max([max(dataframe[column_name].str.len()), len(column_name)])
+        else:
+            max_value =  len(column_name) + 2
+
         sizes.extend([max_value])
 
-    return sizes + [10 for col in range(0, len(dataframe.columns) - len(columns))]
+    return sizes
 
 
 def excel_header_color(xlsx, worksheet, df):
@@ -237,18 +238,14 @@ def excel_columns_size(worksheet, columns_size):
 
 
         
-def save_to_excel_pivot(xlsx, df, columns, sheet_name_arg = None):
-    if not sheet_name_arg:
-        sheet_name = columns[-1]
-    else:
-        sheet_name = sheet_name_arg
-    
+def save_to_excel_pivot(xlsx, df, columns, sheet_name):    
     workbook = xlsx.book        
     df_pivot = df.pipe(pivot_by_category_totals, columns)
 
     df_pivot \
         .pipe(style_dataframe_totals, columns) \
         .to_excel(xlsx, sheet_name, index = False)
+
     worksheet = workbook.get_worksheet_by_name(sheet_name)
 
     excel_columns_size(worksheet, get_col_widths_months(df_pivot, columns))
@@ -276,7 +273,8 @@ def write_to_excel_levels(df, excel_name, target_dir = "./target"):
     save_to_excel_pivot(xlsx, df, ["Tipo", "Categoria"], "Nivel 2")
     save_to_excel_pivot(xlsx, df, ["Tipo", "Categoria", "Subcategoria"], "Nivel 3")
     save_to_excel_pivot(xlsx, df, ["Tipo", "Categoria", "Subcategoria", "Beneficiario"], "Nivel 4")
-    save_to_excel_pivot(xlsx, df, ["Beneficiario"], "Beneficiarios")
+    if (excel_name == 'Despacho'):
+        save_to_excel_pivot(xlsx, df.query("Categoria == 'Ingresos'"), ["Beneficiario", "Subcategoria", "Transaccion"], "Beneficiarios")
 
     xlsx.close()
 
