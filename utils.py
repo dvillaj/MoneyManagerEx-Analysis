@@ -37,6 +37,29 @@ def return_hogar_movements(df):
             .convert_dtypes()
         )
 
+def return_beneficiarios(df):
+    return (df 
+        .assign(Categoria = lambda df: df.Categoria + ":" + df.Subcategoria) 
+        .filter(["Beneficiario", "Categoria"]) 
+        .drop_duplicates() 
+        .dropna() 
+        .assign(Duplicado = lambda df: df.groupby(["Beneficiario"]).Categoria.transform("count").map(lambda x: "Si" if x > 1 else "No"))
+        .sort_values(["Beneficiario"])
+    )
+    
+def return_treemap_data(df):
+    return (df
+        .assign(MaxDate = lambda df: pd.to_datetime((df.Fecha.max() - datetime.timedelta(days=0)).date()),
+                MinDate = lambda df: pd.to_datetime((df.Fecha.min() - datetime.timedelta(days=0)).date()))
+        .query("Fecha.between(MinDate, MaxDate)")
+        .pipe(pivot_by_category, ["Tipo", "Categoria", "Subcategoria", "Beneficiario"])
+        # .filter(["Tipo", "Categoria", "Subcategoria", "Beneficiario", "Media", "Total"])
+        .query("not (Tipo == 'Gastos' and Total > 0)")
+        .assign(Media = lambda df: df.Media.abs(),
+                Total = lambda df: df.Total.abs()
+               )
+     )
+     
 
 def total_rows(df, columns):
     if len(columns) > 1:
@@ -121,26 +144,6 @@ def pivot_by_category_totals(df, columns):
                     .reset_index(drop = True)
 
     
-def total_rows(df, columns):
-    if len(columns) > 1:
-        group_by_columns = columns[:-1]
-        first_column = group_by_columns[-1]
-        last_column = columns[-1]
-
-        df_totales = df \
-            .groupby(group_by_columns).sum().reset_index() \
-            .query(first_column + " not in ['Total']")
-
-        df_totales[last_column] = df_totales[first_column].map(lambda x: "Total" if x == "Total" else "Total " + x)
-    else:
-        last_column = columns[0]
-        df_totales = df.sum(numeric_only=True).to_frame().transpose()
-        df_totales[last_column] = "Total"
-
-    return df_totales    
-
-
-
 def highlight_total(df, column_name):
     if str(df[column_name]).startswith('Total') :
         return ['font-weight: bold' for v in df]
@@ -227,16 +230,6 @@ def excel_columns_size(worksheet, columns_size):
         worksheet.set_column(i, i, width)
 
 
-def return_beneficiarios(df):
-    return (df 
-        .assign(Categoria = lambda df: df.Categoria + ":" + df.Subcategoria) 
-        .filter(["Beneficiario", "Categoria"]) 
-        .drop_duplicates() 
-        .dropna() 
-        .assign(Duplicado = lambda df: df.groupby(["Beneficiario"]).Categoria.transform("count").map(lambda x: "Si" if x > 1 else "No"))
-        .sort_values(["Beneficiario"])
-    )
-    
         
 def save_to_excel_pivot(xlsx, df, columns, sheet_name_arg = None):
     if not sheet_name_arg:
@@ -281,17 +274,3 @@ def write_to_excel(df, excel_name):
     save_to_excel(xlsx, df.pipe(return_beneficiarios), "Beneficario - Categoría")
 
     xlsx.close()
-
-
-def treemap_data(df):
-    return (df
-        .assign(MaxDate = lambda df: pd.to_datetime((df.Fecha.max() - datetime.timedelta(days=0)).date()),
-                MinDate = lambda df: pd.to_datetime((df.Fecha.min() - datetime.timedelta(days=0)).date()))
-        .query("Fecha.between(MinDate, MaxDate)")
-        .pipe(pivot_by_category, ["Tipo", "Categoria", "Subcategoria", "Beneficiario"])
-        # .filter(["Tipo", "Categoria", "Subcategoria", "Beneficiario", "Media", "Total"])
-        .query("not (Tipo == 'Gastos' and Total > 0)")
-        .assign(Media = lambda df: df.Media.abs(),
-                Total = lambda df: df.Total.abs()
-               )
-     )
