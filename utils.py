@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
-import datetime
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def clean_data(df):
     return (df 
@@ -48,6 +50,8 @@ def return_beneficiarios(df):
     )
     
 def return_treemap_data(df):
+    import datetime
+
     return (df
         .assign(MaxDate = lambda df: pd.to_datetime((df.Fecha.max() - datetime.timedelta(days=0)).date()),
                 MinDate = lambda df: pd.to_datetime((df.Fecha.min() - datetime.timedelta(days=0)).date()))
@@ -59,7 +63,7 @@ def return_treemap_data(df):
                 Total = lambda df: df.Total.abs()
                )
      )
-     
+
 
 def total_rows(df, columns):
     if len(columns) > 1:
@@ -164,8 +168,10 @@ def style_locale_es(df):
 
 
 def style_dataframe_totals(df, columns):
-    today = datetime.date.today()
-    month = today.month
+    # import datetime
+
+    # today = datetime.date.today()
+    # month = today.month
     
     df_styled = df \
       .style.format(thousands=",", precision = 2)
@@ -263,14 +269,44 @@ def save_to_excel(xlsx, df, sheet_name):
     excel_border(xlsx, worksheet, df)
     
 
-def write_to_excel(df, excel_name):
-    xlsx = pd.ExcelWriter(excel_name, engine='xlsxwriter')
+def write_to_excel_levels(df, excel_name, target_dir = "./target"):
+    xlsx = pd.ExcelWriter(f"{target_dir}/{excel_name}.xlsx", engine='xlsxwriter')
 
     save_to_excel_pivot(xlsx, df, ["Tipo"], "Nivel 1")
     save_to_excel_pivot(xlsx, df, ["Tipo", "Categoria"], "Nivel 2")
     save_to_excel_pivot(xlsx, df, ["Tipo", "Categoria", "Subcategoria"], "Nivel 3")
     save_to_excel_pivot(xlsx, df, ["Tipo", "Categoria", "Subcategoria", "Beneficiario"], "Nivel 4")
     save_to_excel_pivot(xlsx, df, ["Beneficiario"], "Beneficiarios")
-    save_to_excel(xlsx, df.pipe(return_beneficiarios), "Beneficario - Categoría")
 
     xlsx.close()
+
+
+def write_to_excel_beneficiarios(df, excel_name, target_dir = "./target"):
+    xlsx = pd.ExcelWriter(f"{target_dir}/{excel_name}.xlsx", engine='xlsxwriter')
+
+    save_to_excel(xlsx, df.pipe(return_hogar_movements).pipe(return_beneficiarios), "Hogar")
+    save_to_excel(xlsx, df.pipe(return_despacho_movements).pipe(return_beneficiarios), "Despacho")
+
+    xlsx.close()
+
+
+def plot_tree_map(df, tipo, target_dir = "./target"):
+    import plotly.express as px
+    import plotly
+
+    # color = "Categoria",
+    # px.Constant('All'),
+    # color_continuous_scale = 'RdBu',
+    fig = px.treemap(df.pipe(return_treemap_data),
+                path=[ 'Tipo', 'Categoria', 'Subcategoria', 'Beneficiario'],
+                values = "Total",
+                title= f"{tipo}: Gastos / Ingresos totales por Categoria"
+    )
+
+    fig.update_layout(
+            title_font_size=42,
+            title_font_family="Arial"
+        )
+
+
+    plotly.offline.plot(fig, filename = f'{target_dir}/TreeMap_{tipo}.html')
