@@ -196,9 +196,9 @@ def get_col_widths_months(dataframe, columns):
     for index, column_name in enumerate(dataframe.columns.to_list()):
 
         if (index < len(columns)):
-            max_value = max([max(dataframe[column_name].str.len()), len(column_name)])
+            max_value = max([dataframe[column_name].str.len().max(), len(column_name)])
         else:
-            max_value =  len(column_name) + 2
+            max_value = max([dataframe[column_name].map(lambda value: len(f'{value:,.2f}')).max(), len(column_name)]) + 1
 
         sizes.extend([max_value])
 
