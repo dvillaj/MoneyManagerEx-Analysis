@@ -185,7 +185,7 @@ def style_dataframe_totals(df, columns):
 def get_col_widths(dataframe):
     sizes = []
     for column_name in dataframe.columns.to_list():
-        max_value = max([max(dataframe[column_name].str.len()), len(column_name)])
+        max_value = max([max(dataframe[column_name].str.len()), len(column_name) + 2])
         sizes.extend([max_value])
 
     return sizes
@@ -205,18 +205,31 @@ def get_col_widths_months(dataframe, columns):
     return sizes
 
 
-def excel_header_color(xlsx, worksheet, df):
+def excel_header_color(xlsx, worksheet, df, columns = None):
     # Add a header format.
     header_format = xlsx.book.add_format({
         'bold': True,
         'text_wrap': True,
         'valign': 'top',
+        'align': 'left',
         'fg_color': '#FFE8A4',
         'border': 1})
 
+    header_format_values = xlsx.book.add_format({
+        'bold': True,
+        'text_wrap': True,
+        'valign': 'top',
+        'align': 'center',
+        'fg_color': '#FFE8A4',
+        'border': 1})
+
+
     # Write the column headers with the defined format.
     for col_num, value in enumerate(df.columns.values):
-        worksheet.write(0, col_num, value, header_format)
+        if (columns and col_num >= len(columns)):
+            worksheet.write(0, col_num, value, header_format_values)
+        else:
+            worksheet.write(0, col_num, value, header_format)
 
 
 def excel_autofilter(worksheet, df, columns):
@@ -249,7 +262,7 @@ def save_to_excel_pivot(xlsx, df, columns, sheet_name):
     worksheet = workbook.get_worksheet_by_name(sheet_name)
 
     excel_columns_size(worksheet, get_col_widths_months(df_pivot, columns))
-    excel_header_color(xlsx, worksheet, df_pivot)
+    excel_header_color(xlsx, worksheet, df_pivot, columns)
     excel_autofilter(worksheet, df_pivot, columns)
     excel_border(xlsx, worksheet, df_pivot)
     
