@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -143,8 +142,10 @@ def pivot_by_category_totals(df, columns):
             categories=df_all_values,
             ordered=True)
 
-    return df_all_totales.sort_values(columns) \
-                    .reset_index(drop = True)
+    return (df_all_totales
+                .sort_values(columns)
+                .reset_index(drop = True)
+            )
 
     
 def highlight_total(df, column_name):
@@ -198,7 +199,7 @@ def get_col_widths_months(dataframe, columns):
         if (index < len(columns)):
             max_value = max([dataframe[column_name].str.len().max(), len(column_name)])
         else:
-            max_value = max([dataframe[column_name].map(lambda value: len(f'{value:,.2f}')).max(), len(column_name)]) + 1
+            max_value = max([dataframe[column_name].map(lambda value: len(f'{value:,.2f}')).max() + 1, len(column_name)]) + 1
 
         sizes.extend([max_value])
 
@@ -209,7 +210,7 @@ def excel_header_color(xlsx, worksheet, df, columns = None):
     # Add a header format.
     header_format = xlsx.book.add_format({
         'bold': True,
-        'text_wrap': True,
+        'text_wrap': False,
         'valign': 'top',
         'align': 'left',
         'fg_color': '#FFE8A4',
@@ -217,7 +218,7 @@ def excel_header_color(xlsx, worksheet, df, columns = None):
 
     header_format_values = xlsx.book.add_format({
         'bold': True,
-        'text_wrap': True,
+        'text_wrap': False,
         'valign': 'top',
         'align': 'center',
         'fg_color': '#FFE8A4',
@@ -244,24 +245,51 @@ def excel_border(xlsx, worksheet, df):
                                  { 'type' : 'no_errors',
                                   'format' : border_format} )
 
-
 def excel_columns_size(worksheet, columns_size):
     for i, width in enumerate(columns_size):
         worksheet.set_column(i, i, width)
 
 
-        
+def excel_format_main_columns(xlsx, worksheet, df, columns):
+    formatter = xlsx.book.add_format({
+            'bold': True,
+            'text_wrap': False,
+            'fg_color': '#FFF4D2'})
+
+    for i,column in enumerate(columns):
+        range=f"{chr(ord('A') + i)}2"
+        values = map(
+            lambda x: None if x == 'nan' else x,
+            df[column].astype('str').to_list()
+        )
+        worksheet.write_column(range, values, formatter)
+
+
+def excel_format_size_currency(xlsx, worksheet, columns_lengths, columns):
+    currency_formater = xlsx.book.add_format({'num_format': '#,##0.00 €;[RED] -#,##0.00 €'})
+
+    for i, width in enumerate(columns_lengths):
+        if i < len(columns):
+            worksheet.set_column(i, i, width)
+        else:
+            worksheet.set_column(i, i, width, currency_formater)
+
+
 def save_to_excel_pivot(xlsx, df, columns, sheet_name):    
     workbook = xlsx.book        
     df_pivot = df.pipe(pivot_by_category_totals, columns)
 
-    df_pivot \
-        .pipe(style_dataframe_totals, columns) \
+    (df_pivot 
         .to_excel(xlsx, sheet_name, index = False)
+     )
 
     worksheet = workbook.get_worksheet_by_name(sheet_name)
 
-    excel_columns_size(worksheet, get_col_widths_months(df_pivot, columns))
+    columns_lengths = get_col_widths_months(df_pivot, columns)
+    
+    excel_format_size_currency(xlsx, worksheet, columns_lengths, columns)
+    excel_format_main_columns(xlsx, worksheet, df_pivot, columns)
+
     excel_header_color(xlsx, worksheet, df_pivot, columns)
     excel_autofilter(worksheet, df_pivot, columns)
     excel_border(xlsx, worksheet, df_pivot)
