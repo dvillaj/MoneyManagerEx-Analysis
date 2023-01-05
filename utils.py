@@ -59,7 +59,6 @@ def return_treemap_data(df):
                 MinDate = lambda df: pd.to_datetime((df.Fecha.min() - datetime.timedelta(days=0)).date()))
         .query("Fecha.between(MinDate, MaxDate)")
         .pipe(pivot_by_category, ["Tipo", "Categoria", "Subcategoria", "Beneficiario"])
-        # .filter(["Tipo", "Categoria", "Subcategoria", "Beneficiario", "Media", "Total"])
         .query("not (Tipo == 'Gastos' and Total > 0)")
         .assign(Media = lambda df: df.Media.abs(),
                 Total = lambda df: df.Total.abs()
