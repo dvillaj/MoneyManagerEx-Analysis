@@ -5,3 +5,5 @@ target
 .virtual_documents/
 
 __pycache__/
+
+*.xlsx
