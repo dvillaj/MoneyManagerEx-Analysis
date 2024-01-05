@@ -9,3 +9,5 @@ __pycache__/
 *.xlsx
 
 .idea/
+
+.vscode/
