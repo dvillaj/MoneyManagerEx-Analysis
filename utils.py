@@ -4,7 +4,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import locale
-locale.setlocale(locale.LC_ALL, 'es_es')
+locale.setlocale(locale.LC_ALL, 'es_ES')
 
 def clean_data(df):
     return (df 
@@ -73,7 +73,7 @@ def total_rows(df, columns):
         last_column = columns[-1]
 
         df_totales = df \
-            .groupby(group_by_columns).sum().reset_index() \
+            .groupby(group_by_columns).sum(numeric_only=True).reset_index() \
             .query(first_column + " not in ['Total']")
 
         df_totales[last_column] = df_totales[first_column].map(lambda x: "Total" if x == "Total" else "Total " + x)
@@ -112,8 +112,8 @@ def pivot_by_category(df, category):
          .pipe(sort_columns, category)
          .rename(columns = lambda col: col if isinstance(col, str) else col.strftime("%B %Y").title())
          .assign(
-            Media = lambda dataset: dataset.mean(axis = 'columns'),
-            Total = lambda dataset: dataset.drop(columns = "Media").sum(axis = 'columns')
+            Media = lambda dataset: dataset.mean(axis = 'columns',  numeric_only=True),
+            Total = lambda dataset: dataset.drop(columns = "Media").sum(axis = 'columns',  numeric_only=True)
          )
         .reset_index(drop = True)
         .fillna({ fist_item : "Total" })
@@ -236,11 +236,12 @@ def excel_autofilter(worksheet, df, columns):
     worksheet.autofilter('A1:' + chr(ord('@')+len(columns)) + str(df.shape[0] + 1))
 
 
-def excel_border(xlsx, worksheet, df):
+def excel_border(xlsx, worksheet, df, columns):
     border_format= xlsx.book.add_format({
                             'border': 1
                            })
-    worksheet.conditional_format( 'A1:' + chr(ord('@')+ df.shape[1]) + str(df.shape[0] + 1) , 
+    
+    worksheet.conditional_format( 'A1:' +  chr(ord('@')+ len(columns)) + str(df.shape[0] + 1), 
                                  { 'type' : 'no_errors',
                                   'format' : border_format} )
 
@@ -291,7 +292,7 @@ def save_to_excel_pivot(xlsx, df, columns, sheet_name):
 
     excel_header_color(xlsx, worksheet, df_pivot, columns)
     excel_autofilter(worksheet, df_pivot, columns)
-    excel_border(xlsx, worksheet, df_pivot)
+    excel_border(xlsx, worksheet, df_pivot, columns)
     
 
 def save_to_excel(xlsx, df, sheet_name):
@@ -303,7 +304,7 @@ def save_to_excel(xlsx, df, sheet_name):
     excel_columns_size(worksheet, get_col_widths(df))
     excel_header_color(xlsx, worksheet, df)
     excel_autofilter(worksheet, df, df.columns.to_list())
-    excel_border(xlsx, worksheet, df)
+    excel_border(xlsx, worksheet, df, list(sheet_name))
     
 
 def write_to_excel_levels(df, excel_name, target_dir = "./target"):
